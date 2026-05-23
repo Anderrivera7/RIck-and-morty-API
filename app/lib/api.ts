@@ -18,54 +18,96 @@ export function slugify(name: string): string {
     .replace(/^-|-$/g, "");
 }
 
-export async function getCharacters(page = 1): Promise<CharactersResponse> {
-  const res = await fetch(`${BASE_URL}?page=${page}`, {
-    cache: "force-cache",
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+export async function getCharacters(
+  page = 1
+): Promise<CharactersResponse> {
+  try {
+    const res = await fetch(`${BASE_URL}?page=${page}`, {
+      cache: "force-cache",
+      next: { revalidate: REVALIDATE_SECONDS },
+    });
 
-  if (!res.ok) {
-    throw new Error("Error al obtener personajes");
+    if (!res.ok) {
+      return {
+        info: {
+          count: 0,
+          pages: 0,
+          next: null,
+          prev: null,
+        },
+        results: [],
+      };
+    }
+
+    return await res.json();
+  } catch {
+    return {
+      info: {
+        count: 0,
+        pages: 0,
+        next: null,
+        prev: null,
+      },
+      results: [],
+    };
   }
-
-  return res.json();
 }
 
 async function fetchAllCharacters(): Promise<Character[]> {
-  const first = await getCharacters(1);
-  const characters = [...first.results];
+  try {
+    const first = await getCharacters(1);
 
-  for (let page = 2; page <= first.info.pages; page++) {
-    const data = await getCharacters(page);
-    characters.push(...data.results);
+    if (!first.results?.length) return [];
+
+    const characters = [...first.results];
+
+    for (let page = 2; page <= first.info.pages; page++) {
+      const data = await getCharacters(page);
+
+      if (data.results?.length) {
+        characters.push(...data.results);
+      }
+    }
+
+    return characters;
+  } catch {
+    return [];
   }
-
-  return characters;
 }
 
 export const getAllCharacters = cache(async (): Promise<Character[]> => {
   if (!globalCache.allCharactersPromise) {
     globalCache.allCharactersPromise = fetchAllCharacters();
   }
-  return globalCache.allCharactersPromise;
+
+  return globalCache.allCharactersPromise ?? [];
 });
 
-export async function getCharacterById(id: string): Promise<Character | null> {
-  const res = await fetch(`${BASE_URL}/${id}`, {
-    cache: "force-cache",
-    next: { revalidate: REVALIDATE_SECONDS },
-  });
+export async function getCharacterById(
+  id: string
+): Promise<Character | null> {
+  try {
+    const res = await fetch(`${BASE_URL}/${id}`, {
+      cache: "force-cache",
+      next: { revalidate: REVALIDATE_SECONDS },
+    });
 
-  if (!res.ok) {
+    if (!res.ok) return null;
+
+    return await res.json();
+  } catch {
     return null;
   }
-
-  return res.json();
 }
 
 export async function getCharacterBySlug(
   slug: string
 ): Promise<Character | null> {
-  const all = await getAllCharacters();
-  return all.find((c) => slugify(c.name) === slug) ?? null;
+  try {
+    const all = await getAllCharacters();
+
+    return all.find((c) => slugify(c.name) === slug) ?? null;
+  } catch {
+    return null;
+  }
 }
